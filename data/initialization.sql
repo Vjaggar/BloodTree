@@ -18,7 +18,7 @@ INSERT INTO TEST.bloodtree_out(tab,father,son) SELECT tab,father,son FROM TEST.b
 -- SELECT * from bloodtree_out;
 
 -- 接口表
-SELECT a.father from
+SELECT a.father,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from
 (SELECT father FROM TEST.bloodtree_out group by father) a
 LEFT JOIN
 (SELECT son FROM TEST.bloodtree_out group by son) b
@@ -27,26 +27,26 @@ where b.son is null
 order by a.father
 ;
 -- 中间表
-SELECT tmp FROM(
-SELECT a.father as tmp from
+SELECT tmp,db,tab FROM(
+SELECT a.father as tmp,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from
 (SELECT father FROM TEST.bloodtree_out group by father) a
 LEFT JOIN
 (SELECT son FROM TEST.bloodtree_out group by son) b
 on a.father=b.son
 where b.son is not null
 UNION
-SELECT a.son as tmp from
+SELECT a.son as tmp,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from
 (SELECT son FROM TEST.bloodtree_out group by son) a
 LEFT JOIN
 (SELECT father FROM TEST.bloodtree_out group by father) b
 on a.son=b.father
 where b.father is not null
 ) x
-order by tmp
+order by tmp,db,tab
 ;
 
 -- 结果表
-SELECT a.son from
+SELECT a.son,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from
 (SELECT son FROM TEST.bloodtree_out group by son) a
 LEFT JOIN
 (SELECT father FROM TEST.bloodtree_out group by father) b

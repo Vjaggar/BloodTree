@@ -1,7 +1,14 @@
-import java.io.*;
+
+
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.sql.*;
 
 public class BloodTree {
 
@@ -14,58 +21,85 @@ public class BloodTree {
         // 将这些一一对应的关系装载到MySQL表中
         // 去除掉子表为空的数据
         // mvn install:install-file -Dfile=mysql-connector-java-5.1.39-bin.jar -DgroupId=org.oracle.mysql -DartifactId=oracle -Dversion=5.1.39 -Dpackaging=jar
-//        create table bloodtree_in(tab VARCHAR(200),section int,father VARCHAR(200),son VARCHAR(200));
+//        create table bloodtree_in(tab VARCHAR(200),section int,father VARCHAR(200),son VARCHAR(200)) default charset=utf8 default collate=utf8_bin;
 //        create table bloodtree_out(tab VARCHAR(200),father VARCHAR(200),son VARCHAR(200));
 
-        String sourceFile = "";
+//        getTable("F:\\test\\xx.hql","MID");
 
-        if (args.length == 1) {
-            sourceFile = args[0];
 
-        } else {
-            System.err.println("参数不完整");
-            System.exit(2);
-        }
+        getAllTable("F:\\test\\xx.hql");
+
+
+
+
+    }
+
+
+
+    public static List<String> getAllTable(String sourceFile) {
+        findTable(sourceFile);
+        List<String> tables = select("SELECT TAB FROM(\n" +
+                "SELECT father AS TAB FROM test.bloodtree_in \n" +
+                "UNION ALL\n" +
+                "SELECT SON AS TAB FROM test.bloodtree_in\n" +
+                ") X\n" +
+                "WHERE TAB<>''\n" +
+                "GROUP BY TAB;");
+        return tables;
+    }
+
+
+
+
+
+    public static List<String> getTable(String sourceFile,String flag) {
+        List<String> tables = new ArrayList<String>();
 
         findTable(sourceFile);
 
-        System.out.println("\n接口表:");
-        select("SELECT a.father from\n" +
-                "(SELECT father FROM test.bloodtree_out group by father) a\n" +
-                "LEFT JOIN\n" +
-                "(SELECT son FROM test.bloodtree_out group by son) b\n" +
-                "on a.father=b.son\n" +
-                "where b.son is null\n" +
-                "order by a.father\n" +
-                ";");
-        System.out.println("\n结果表:");
-        select("SELECT a.son from\n" +
-                "(SELECT son FROM TEST.bloodtree_out group by son) a\n" +
-                "LEFT JOIN\n" +
-                "(SELECT father FROM TEST.bloodtree_out group by father) b\n" +
-                "on a.son=b.father\n" +
-                "where b.father is null\n" +
-                "order by a.son\n" +
-                ";");
-        System.out.println("\n中间表:");
-        select("SELECT tmp FROM(\n" +
-                "SELECT a.father as tmp from\n" +
-                "(SELECT father FROM TEST.bloodtree_out group by father) a\n" +
-                "LEFT JOIN\n" +
-                "(SELECT son FROM TEST.bloodtree_out group by son) b\n" +
-                "on a.father=b.son\n" +
-                "where b.son is not null\n" +
-                "UNION\n" +
-                "SELECT a.son as tmp from\n" +
-                "(SELECT son FROM TEST.bloodtree_out group by son) a\n" +
-                "LEFT JOIN\n" +
-                "(SELECT father FROM TEST.bloodtree_out group by father) b\n" +
-                "on a.son=b.father\n" +
-                "where b.father is not null\n" +
-                ") x\n" +
-                "order by tmp\n" +
-                ";");
+        if (flag.equals("SOURCE")) {
 
+            tables = select("SELECT a.father,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from\n" +
+                    "(SELECT father FROM TEST.bloodtree_out group by father) a\n" +
+                    "LEFT JOIN\n" +
+                    "(SELECT son FROM TEST.bloodtree_out group by son) b\n" +
+                    "on a.father=b.son\n" +
+                    "where b.son is null\n" +
+                    "order by a.father\n" +
+                    ";");
+
+        } else if (flag.equals("RESULT")) {
+            tables = select("SELECT a.son,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from\n" +
+                    "(SELECT son FROM TEST.bloodtree_out group by son) a\n" +
+                    "LEFT JOIN\n" +
+                    "(SELECT father FROM TEST.bloodtree_out group by father) b\n" +
+                    "on a.son=b.father\n" +
+                    "where b.father is null\n" +
+                    "order by a.son\n" +
+                    ";");
+
+        } else  if (flag.equals("MID")) {
+            tables = select("SELECT tmp,db,tab FROM(\n" +
+                    "SELECT a.father as tmp,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from\n" +
+                    "(SELECT father FROM TEST.bloodtree_out group by father) a\n" +
+                    "LEFT JOIN\n" +
+                    "(SELECT son FROM TEST.bloodtree_out group by son) b\n" +
+                    "on a.father=b.son\n" +
+                    "where b.son is not null\n" +
+                    "UNION\n" +
+                    "SELECT a.son as tmp,substring_index(father,'.',1) as db,substring_index(father,'.',-1) as tab from\n" +
+                    "(SELECT son FROM TEST.bloodtree_out group by son) a\n" +
+                    "LEFT JOIN\n" +
+                    "(SELECT father FROM TEST.bloodtree_out group by father) b\n" +
+                    "on a.son=b.father\n" +
+                    "where b.father is not null\n" +
+                    ") x\n" +
+                    "order by tmp,db,tab\n" +
+                    ";");
+
+        }
+
+        return tables;
     }
 
     public static void findTable(String sourceFile) {
@@ -96,10 +130,10 @@ public class BloodTree {
                         "INF|INF10000|INF31W|INF3BSN|INF3CHN|INF3CPC|INF3CRM|INF3DAP|INF3OTH|INF3RM|INF3SETT|" +
                         "INF3SPS|INF3TPSS|INF3WG|INF_BSP|INF_BSS|INF_MSS|INF_NET|INF_OSS|INFDAP|INFEDC|INT|INT3ASS|" +
                         "INT3LAB|INT3MID|INT_NET|LAB|LSQ_HS|LXY_HS|TEST|TMP|TST|USER_BO|USER_DTD|USER_KHTYXT|USER_MRXT|" +
-                        "USER_SJ|USER_SJGL|USER_SJJS|USER_WGYX|USER_ZHCW|USER_ZHJSXT|USER_ZHRL|USER_ZJJH|WID|ZNYX_APPED)\\.\\S+");
-                Matcher m = p.matcher(splitTemp.toUpperCase());
+                        "USER_SJ|USER_SJGL|USER_SJJS|USER_WGYX|USER_ZHCW|USER_ZHJSXT|USER_ZHRL|USER_ZJJH|WID|ZNYX_APPED)\\.\\S+",Pattern.CASE_INSENSITIVE);
+                Matcher m = p.matcher(splitTemp);
                 while (m.find()) {
-                    match = m.group().replace(";","");
+                    match = m.group().replace(";", "");
                     if (match != null) {
 //                        System.out.println("match: " + i + " " + match);
                         if (i == 0) {
@@ -123,7 +157,7 @@ public class BloodTree {
                     if (match != null) {
 //                        System.out.println("match: " + i + " " + match);
 //                        System.out.println("第" + y + "段结束: " + splitTemp);
-                        i=0;
+                        i = 0;
                         y++;
                     }
                 }
@@ -140,7 +174,7 @@ public class BloodTree {
             }
         }
         executeSql("DELETE FROM TEST.bloodtree_out WHERE tab='9527';");
-        executeSql("INSERT INTO TEST.bloodtree_out(tab,father,son) SELECT tab,father,son FROM TEST.bloodtree_in WHERE father<>'' GROUP BY tab,father,son ORDER BY tab,son,father;");
+        executeSql("INSERT INTO TEST.bloodtree_out(tab,father,son) SELECT tab,father,son FROM( SELECT upper(tab) AS tab,upper(father) AS father,upper(son) AS son FROM TEST.bloodtree_in WHERE father<>'') x GROUP BY tab,father,son ORDER BY tab,son,father;");
     }
 
 
@@ -184,8 +218,10 @@ public class BloodTree {
     }
 
     // 查询操作
-    public static void select(String sql) {
+    public static List<String> select(String sql) {
         Connection nn = connectionMysql();
+        List<String> tables = new ArrayList<String>();
+
 // 执行操作
         try {
             // 插入数据的sql语句
@@ -194,12 +230,12 @@ public class BloodTree {
             ResultSet rs = stmt1.executeQuery(sql);
 //            stmt1.executeQuery(sql);
             // 展开结果集数据库
-            while(rs.next()){
+            while (rs.next()) {
                 // 通过字段检索
-                String table  = rs.getString(1);
+                tables.add(rs.getString(1));
                 // 输出数据
-                System.out.print(table);
-                System.out.print("\n");
+//                System.out.print(rs.getString(1));
+//                System.out.print("\n");
             }
             nn.close();   //关闭数据库连接
         } catch (SQLException e) {
@@ -213,5 +249,9 @@ public class BloodTree {
             e.printStackTrace();
         }
 
+        return tables;
     }
 }
+
+
+
